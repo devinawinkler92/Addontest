@@ -4,7 +4,7 @@
     "description": "Vehicle Assembly & Flight Addon Behavior Pack",
     "name": "Vehicle Builder BP",
     "uuid": "8f2a1a40-3e28-4e89-a292-23c52e123456",
-    "version": [1, 0, 1],
+    "version": [1, 0, 2],
     "min_engine_version": [1, 20, 80]
   },
   "modules": [
@@ -13,14 +13,14 @@
       "type": "script",
       "language": "javascript",
       "uuid": "7a323380-1a1b-423f-9123-5566778899aa",
-      "version": [1, 0, 1],
+      "version": [1, 0, 2],
       "entry": "scripts/main.js"
     },
     {
       "description": "Data module",
       "type": "data",
       "uuid": "4c982310-2b2c-4d3e-8f23-1122334455bb",
-      "version": [1, 0, 1]
+      "version": [1, 0, 2]
     }
   ],
   "dependencies": [
@@ -30,7 +30,7 @@
     },
     {
       "uuid": "e5b88210-4f56-4c7a-9a88-8877665544cc",
-      "version": [1, 0, 1]
+      "version": [1, 0, 2]
     }
   ]
 }
