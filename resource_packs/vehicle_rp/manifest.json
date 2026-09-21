@@ -4,7 +4,7 @@
     "description": "Vehicle Assembly & Flight Addon Resource Pack",
     "name": "Vehicle Builder RP",
     "uuid": "e5b88210-4f56-4c7a-9a88-8877665544cc",
-    "version": [1, 0, 6],
+    "version": [1, 0, 7],
     "min_engine_version": [1, 20, 80]
   },
   "modules": [
@@ -12,7 +12,7 @@
       "description": "Resource module",
       "type": "resources",
       "uuid": "2a1100bb-4c22-4d33-9111-eeff22334455",
-      "version": [1, 0, 6]
+      "version": [1, 0, 7]
     }
   ]
 }

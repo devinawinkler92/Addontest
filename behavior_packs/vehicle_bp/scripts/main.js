@@ -4,21 +4,6 @@ import { system, world, ItemStack, EntityComponentTypes, BlockPermutation } from
 const MAX_BLOCKS = 250;
 const CONCRETE_SUFFIX = "_concrete";
 
-// Convert blockFace input safely into numerical offset vector
-function getFaceOffset(blockFace) {
-    if (!blockFace) return { x: 0, y: 1, z: 0 };
-
-    const str = String(blockFace).toLowerCase();
-    if (str.includes("up")) return { x: 0, y: 1, z: 0 };
-    if (str.includes("down")) return { x: 0, y: -1, z: 0 };
-    if (str.includes("north")) return { x: 0, y: 0, z: -1 };
-    if (str.includes("south")) return { x: 0, y: 0, z: 1 };
-    if (str.includes("east")) return { x: 1, y: 0, z: 0 };
-    if (str.includes("west")) return { x: -1, y: 0, z: 0 };
-
-    return { x: 0, y: 1, z: 0 };
-}
-
 // Check if a block type is a concrete platform block
 function isConcreteBlock(typeId) {
     return typeof typeId === "string" && typeId.endsWith(CONCRETE_SUFFIX);
@@ -104,26 +89,8 @@ function clearStructureBlocks(dimension, startPos, blocksData) {
     }
 }
 
-// Spawn visual block display entities for structure blocks
-function createStructureDisplays(dimension, entityPos, blocksData) {
-    const displays = [];
-    for (const b of blocksData) {
-        const dPos = {
-            x: entityPos.x + b.dx,
-            y: entityPos.y + b.dy,
-            z: entityPos.z + b.dz
-        };
-        try {
-            const displayEntity = dimension.spawnEntity("custom:block_display", dPos);
-            displayEntity.nameTag = b.typeId;
-            displays.push(displayEntity);
-        } catch (e) { }
-    }
-    return displays;
-}
-
-// Convert structure back to world blocks at the vehicle position when joystick is broken
-function rebuildStructureInWorld(dimension, entityPos, entityRotation, blocksData) {
+// Place real blocks in world at current position
+function placeStructureBlocks(dimension, entityPos, entityRotation, blocksData) {
     const ex = Math.floor(Number(entityPos?.x) || 0);
     const ey = Math.floor(Number(entityPos?.y) || 0);
     const ez = Math.floor(Number(entityPos?.z) || 0);
@@ -161,6 +128,46 @@ function rebuildStructureInWorld(dimension, entityPos, entityRotation, blocksDat
     }
 }
 
+// Protect assembled vehicle blocks from being broken unless joystick is removed
+world.beforeEvents.playerBreakBlock.subscribe((event) => {
+    const player = event.player;
+    if (!player) return;
+
+    const dimension = player.dimension;
+    const blockLoc = event.block.location;
+
+    const nearbyVehicles = dimension.getEntities({
+        type: "custom:vehicle",
+        location: blockLoc,
+        maxDistance: 12
+    });
+
+    if (nearbyVehicles.length > 0) {
+        // If player is trying to break the Joystick itself, allow it & disassemble
+        if (event.block.typeId === "custom:joystick") {
+            const vehicle = nearbyVehicles[0];
+            let structureDataStr;
+            try {
+                structureDataStr = vehicle.getDynamicProperty("vehicle_blocks");
+            } catch (e) { }
+
+            if (structureDataStr) {
+                try {
+                    const blocksData = JSON.parse(structureDataStr);
+                    // Free blocks from vehicle mode
+                } catch (e) { }
+            }
+            vehicle.remove();
+            player.sendMessage("§e[Vehicle Builder] Vehicle disassembled! Blocks are now editable again.");
+            return;
+        }
+
+        // Otherwise block editing while assembled
+        event.cancel = true;
+        player.sendMessage("§c[Vehicle Builder] Vehicle is assembled! Break the Joystick block to edit blocks again.");
+    }
+});
+
 // Activate vehicle mode when player places or interacts with joystick block
 world.beforeEvents.itemUseOn.subscribe((event) => {
     const player = event.source;
@@ -185,7 +192,7 @@ world.beforeEvents.itemUseOn.subscribe((event) => {
             const rideable = vehicle.getComponent(EntityComponentTypes.Rideable);
             if (rideable) {
                 rideable.addRider(player);
-                player.sendMessage("§a[Vehicle Builder] Mounted parked vehicle! Drive with look & movement controls.");
+                player.sendMessage("§a[Vehicle Builder] Mounted vehicle! Look & walk (W/A/S/D) to drive!");
             }
             return;
         }
@@ -214,9 +221,8 @@ world.beforeEvents.itemUseOn.subscribe((event) => {
         } catch (e) { }
         vehicleEntity.nameTag = `Vehicle (${scanResult.blocksData.length} blocks)`;
 
-        // Clear real world blocks and spawn non-editable visual display entities
-        clearStructureBlocks(dimension, blockLoc, scanResult.blocksData);
-        createStructureDisplays(dimension, spawnPos, scanResult.blocksData);
+        // Keep real blocks placed at world location so the vehicle is 100% visible!
+        placeStructureBlocks(dimension, blockLoc, { x: 0, y: 0, z: 0 }, scanResult.blocksData);
 
         // Auto mount player
         const rideable = vehicleEntity.getComponent(EntityComponentTypes.Rideable);
@@ -224,7 +230,7 @@ world.beforeEvents.itemUseOn.subscribe((event) => {
             rideable.addRider(player);
         }
 
-        player.sendMessage("§a[Vehicle Builder] Vehicle Activated! Blocks remain visible as non-editable vehicle parts while parked!");
+        player.sendMessage("§a[Vehicle Builder] Vehicle Assembled! Walk/move joystick controls to drive! Shift to unmount.");
     });
 });
 
@@ -251,6 +257,14 @@ system.runInterval(() => {
                 // Rotate vehicle with rider steering
                 vehicle.setRotation({ x: 0, y: rot.y });
 
+                // Detect actual player joystick movement (W/A/S/D velocity)
+                let driverVel = { x: 0, y: 0, z: 0 };
+                try {
+                    driverVel = driver.getVelocity() || { x: 0, y: 0, z: 0 };
+                } catch (e) { }
+
+                const isMovingJoystick = Math.abs(driverVel.x) > 0.02 || Math.abs(driverVel.z) > 0.02;
+
                 const pitch = rot.x;
                 const isLookingUpToFly = pitch < -25;
                 const isLookingDownToDescend = pitch > 35;
@@ -259,71 +273,39 @@ system.runInterval(() => {
                 let vz = 0;
                 let vy = 0;
 
-                if (Math.abs(viewDirection.x) > 0.4 || Math.abs(viewDirection.z) > 0.4) {
-                    const speed = 0.22;
+                // Move ONLY when player moves joystick
+                if (isMovingJoystick) {
+                    const speed = 0.25;
                     vx = viewDirection.x * speed;
                     vz = viewDirection.z * speed;
                 }
 
-                if (isLookingUpToFly) {
+                if (isLookingUpToFly && isMovingJoystick) {
                     vy = 0.25;
-                } else if (isLookingDownToDescend && !isInWater) {
+                } else if (isLookingDownToDescend && isMovingJoystick && !isInWater) {
                     vy = -0.2;
                 }
 
-                if (isInWater) {
-                    const waterBlock = dimension.getBlock({ x: Math.floor(currentPos.x), y: Math.ceil(currentPos.y), z: Math.floor(currentPos.z) });
-                    if (waterBlock && waterBlock.isLiquid) {
-                        vy = 0.06;
-                    }
+                if (isInWater && isMovingJoystick) {
+                    vy = 0.06;
                 }
 
                 if (vx !== 0 || vy !== 0 || vz !== 0) {
                     vehicle.applyImpulse({ x: vx, y: vy, z: vz });
                 }
 
-            } else {
-                // Unmounted state: Vehicle remains parked in place with non-editable visible block structure!
-                if (isInWater) {
-                    const waterBlock = dimension.getBlock({ x: Math.floor(currentPos.x), y: Math.ceil(currentPos.y), z: Math.floor(currentPos.z) });
-                    if (waterBlock && waterBlock.isLiquid) {
-                        vehicle.applyImpulse({ x: 0, y: 0.05, z: 0 });
-                    }
-                }
             }
         }
     }
 }, 1);
 
-// ONLY when player breaks or hits the joystick / vehicle entity: RESTORE REAL EDITABLE BLOCKS BACK TO WORLD
+// RESTORE BLOCKS WHEN BREAKING JOYSTICK
 world.afterEvents.entityHurt.subscribe((event) => {
     const vehicle = event.hurtEntity;
     if (vehicle.typeId !== "custom:vehicle") return;
 
     const dimension = vehicle.dimension;
     const pos = vehicle.location;
-
-    // Clear display sub-entities
-    const nearbyDisplays = dimension.getEntities({
-        type: "custom:block_display",
-        location: pos,
-        maxDistance: 16
-    });
-    for (const d of nearbyDisplays) {
-        d.remove();
-    }
-
-    let structureDataStr;
-    try {
-        structureDataStr = vehicle.getDynamicProperty("vehicle_blocks");
-    } catch (e) { }
-
-    if (structureDataStr) {
-        try {
-            const blocksData = JSON.parse(structureDataStr);
-            rebuildStructureInWorld(dimension, pos, vehicle.getRotation(), blocksData);
-        } catch (e) { }
-    }
 
     dimension.spawnItem(new ItemStack("custom:joystick", 1), pos);
     vehicle.remove();
