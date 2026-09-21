@@ -104,6 +104,24 @@ function clearStructureBlocks(dimension, startPos, blocksData) {
     }
 }
 
+// Spawn visual block display entities for structure blocks
+function createStructureDisplays(dimension, entityPos, blocksData) {
+    const displays = [];
+    for (const b of blocksData) {
+        const dPos = {
+            x: entityPos.x + b.dx,
+            y: entityPos.y + b.dy,
+            z: entityPos.z + b.dz
+        };
+        try {
+            const displayEntity = dimension.spawnEntity("custom:block_display", dPos);
+            displayEntity.nameTag = b.typeId;
+            displays.push(displayEntity);
+        } catch (e) { }
+    }
+    return displays;
+}
+
 // Convert structure back to world blocks at the vehicle position when joystick is broken
 function rebuildStructureInWorld(dimension, entityPos, entityRotation, blocksData) {
     const ex = Math.floor(Number(entityPos?.x) || 0);
@@ -196,8 +214,9 @@ world.beforeEvents.itemUseOn.subscribe((event) => {
         } catch (e) { }
         vehicleEntity.nameTag = `Vehicle (${scanResult.blocksData.length} blocks)`;
 
-        // Clear world blocks
+        // Clear real world blocks and spawn non-editable visual display entities
         clearStructureBlocks(dimension, blockLoc, scanResult.blocksData);
+        createStructureDisplays(dimension, spawnPos, scanResult.blocksData);
 
         // Auto mount player
         const rideable = vehicleEntity.getComponent(EntityComponentTypes.Rideable);
@@ -205,7 +224,7 @@ world.beforeEvents.itemUseOn.subscribe((event) => {
             rideable.addRider(player);
         }
 
-        player.sendMessage("§a[Vehicle Builder] Vehicle Activated! Drive with look & movement controls. Sneak/Shift to unmount.");
+        player.sendMessage("§a[Vehicle Builder] Vehicle Activated! Blocks remain visible as non-editable vehicle parts while parked!");
     });
 });
 
@@ -232,7 +251,7 @@ system.runInterval(() => {
                 // Rotate vehicle with rider steering
                 vehicle.setRotation({ x: 0, y: rot.y });
 
-                const pitch = rot.x; // pitch angle in degrees (-90 up, +90 down)
+                const pitch = rot.x;
                 const isLookingUpToFly = pitch < -25;
                 const isLookingDownToDescend = pitch > 35;
 
@@ -240,21 +259,18 @@ system.runInterval(() => {
                 let vz = 0;
                 let vy = 0;
 
-                // Move ONLY when steering forward/backward or pitching view
                 if (Math.abs(viewDirection.x) > 0.4 || Math.abs(viewDirection.z) > 0.4) {
                     const speed = 0.22;
                     vx = viewDirection.x * speed;
                     vz = viewDirection.z * speed;
                 }
 
-                // Vertical flying (rocket mode)
                 if (isLookingUpToFly) {
                     vy = 0.25;
                 } else if (isLookingDownToDescend && !isInWater) {
                     vy = -0.2;
                 }
 
-                // Water buoyancy (pirate ship mode)
                 if (isInWater) {
                     const waterBlock = dimension.getBlock({ x: Math.floor(currentPos.x), y: Math.ceil(currentPos.y), z: Math.floor(currentPos.z) });
                     if (waterBlock && waterBlock.isLiquid) {
@@ -267,7 +283,7 @@ system.runInterval(() => {
                 }
 
             } else {
-                // Unmounted state: Vehicle remains parked as entity in place!
+                // Unmounted state: Vehicle remains parked in place with non-editable visible block structure!
                 if (isInWater) {
                     const waterBlock = dimension.getBlock({ x: Math.floor(currentPos.x), y: Math.ceil(currentPos.y), z: Math.floor(currentPos.z) });
                     if (waterBlock && waterBlock.isLiquid) {
@@ -279,13 +295,24 @@ system.runInterval(() => {
     }
 }, 1);
 
-// ONLY when player breaks or hits the joystick / vehicle entity: RESTORE BLOCKS BACK TO WORLD
+// ONLY when player breaks or hits the joystick / vehicle entity: RESTORE REAL EDITABLE BLOCKS BACK TO WORLD
 world.afterEvents.entityHurt.subscribe((event) => {
     const vehicle = event.hurtEntity;
     if (vehicle.typeId !== "custom:vehicle") return;
 
     const dimension = vehicle.dimension;
     const pos = vehicle.location;
+
+    // Clear display sub-entities
+    const nearbyDisplays = dimension.getEntities({
+        type: "custom:block_display",
+        location: pos,
+        maxDistance: 16
+    });
+    for (const d of nearbyDisplays) {
+        d.remove();
+    }
+
     let structureDataStr;
     try {
         structureDataStr = vehicle.getDynamicProperty("vehicle_blocks");
