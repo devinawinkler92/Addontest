@@ -10,7 +10,7 @@
         "default": "textures/entity/boat/oak"
       },
       "geometry": {
-        "default": "geometry.boat"
+        "default": "geometry.vehicle"
       },
       "render_controllers": [
         "controller.render.boat"

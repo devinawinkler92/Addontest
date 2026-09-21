@@ -1,4 +1,4 @@
-import { system, world, ItemStack, EntityComponentTypes, BlockPermutation } from "@minecraft/server";
+import { system, world, ItemStack, EntityComponentTypes, BlockPermutation, Direction } from "@minecraft/server";
 
 // Configuration limits and constants
 const MAX_BLOCKS = 250;
@@ -6,16 +6,48 @@ const CONCRETE_SUFFIX = "_concrete";
 
 // Register dynamic property on world initialization
 world.beforeEvents.worldInitialize.subscribe((event) => {
-    event.entityTypeComponentRegistry.registerDynamicProperties({
-        identifier: "custom:vehicle",
-        properties: {
-            "vehicle_blocks": {
-                type: "string",
-                maxLength: 32000
-            }
+    try {
+        if (event.propertyRegistry) {
+            event.propertyRegistry.registerEntityDynamicProperties({
+                identifier: "custom:vehicle",
+                properties: {
+                    "vehicle_blocks": {
+                        type: "string",
+                        maxLength: 32000
+                    }
+                }
+            });
         }
-    });
+    } catch (e) {
+        // Fallback for different API versions
+    }
 });
+
+// Helper function to get block face offset vector
+function getFaceOffset(blockFace) {
+    switch (blockFace) {
+        case Direction.Up:
+        case "Up":
+            return { x: 0, y: 1, z: 0 };
+        case Direction.Down:
+        case "Down":
+            return { x: 0, y: -1, z: 0 };
+        case Direction.North:
+        case "North":
+            return { x: 0, y: 0, z: -1 };
+        case Direction.South:
+        case "South":
+            return { x: 0, y: 0, z: 1 };
+        case Direction.East:
+        case "East":
+            return { x: 1, y: 0, z: 0 };
+        case Direction.West:
+        case "West":
+            return { x: -1, y: 0, z: 0 };
+        default:
+            return { x: 0, y: 1, z: 0 };
+    }
+}
 
 // Check if a block type is a concrete platform block
 function isConcreteBlock(typeId) {
@@ -139,12 +171,13 @@ world.beforeEvents.itemUseOn.subscribe((event) => {
 
     const dimension = player.dimension;
     const blockPos = event.block.location;
+    const faceOffset = getFaceOffset(event.blockFace);
 
-    // Check click target location
+    // Calculate placePos as exact integer coordinate numbers
     const placePos = {
-        x: blockPos.x + event.blockFace.x,
-        y: blockPos.y + event.blockFace.y,
-        z: blockPos.z + event.blockFace.z
+        x: blockPos.x + faceOffset.x,
+        y: blockPos.y + faceOffset.y,
+        z: blockPos.z + faceOffset.z
     };
 
     // Delay processing to after current event turn
@@ -173,7 +206,9 @@ world.beforeEvents.itemUseOn.subscribe((event) => {
 
         // Store structure metadata into Dynamic Property
         const structureJson = JSON.stringify(scanResult.blocksData);
-        vehicleEntity.setDynamicProperty("vehicle_blocks", structureJson);
+        try {
+            vehicleEntity.setDynamicProperty("vehicle_blocks", structureJson);
+        } catch (e) { }
         vehicleEntity.nameTag = `Vehicle (${scanResult.blocksData.length} blocks)`;
 
         // Clear world blocks
@@ -266,7 +301,10 @@ world.afterEvents.entityHurt.subscribe((event) => {
 
     const dimension = vehicle.dimension;
     const pos = vehicle.location;
-    const structureDataStr = vehicle.getDynamicProperty("vehicle_blocks");
+    let structureDataStr;
+    try {
+        structureDataStr = vehicle.getDynamicProperty("vehicle_blocks");
+    } catch (e) { }
 
     if (structureDataStr) {
         try {

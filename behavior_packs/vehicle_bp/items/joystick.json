@@ -8,14 +8,11 @@
       }
     },
     "components": {
-      "minecraft:icon": {
-        "texture": "joystick"
-      },
+      "minecraft:icon": "joystick",
       "minecraft:display_name": {
         "value": "Vehicle Control Joystick"
       },
-      "minecraft:max_stack_size": 1,
-      "minecraft:use_animation": "camera"
+      "minecraft:max_stack_size": 1
     }
   }
 }
