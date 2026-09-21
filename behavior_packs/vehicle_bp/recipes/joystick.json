@@ -1,5 +1,5 @@
 {
-  "format_version": "1.20.80",
+  "format_version": "1.12.0",
   "minecraft:recipe_shaped": {
     "description": {
       "identifier": "custom:joystick_recipe"
@@ -13,11 +13,6 @@
         "item": "minecraft:lever"
       }
     },
-    "unlock": [
-      {
-        "item": "minecraft:lever"
-      }
-    ],
     "result": {
       "item": "custom:joystick",
       "count": 1

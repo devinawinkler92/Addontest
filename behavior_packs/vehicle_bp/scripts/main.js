@@ -5,21 +5,23 @@ const MAX_BLOCKS = 250;
 const CONCRETE_SUFFIX = "_concrete";
 
 // Dynamic Property Registration
-world.beforeEvents.worldInitialize.subscribe((event) => {
-    try {
-        if (event.propertyRegistry) {
-            event.propertyRegistry.registerEntityDynamicProperties({
-                identifier: "custom:vehicle",
-                properties: {
-                    "vehicle_blocks": {
-                        type: "string",
-                        maxLength: 32000
+try {
+    world.beforeEvents.worldInitialize.subscribe((event) => {
+        try {
+            if (event && event.propertyRegistry && typeof event.propertyRegistry.registerEntityDynamicProperties === "function") {
+                event.propertyRegistry.registerEntityDynamicProperties({
+                    identifier: "custom:vehicle",
+                    properties: {
+                        "vehicle_blocks": {
+                            type: "string",
+                            maxLength: 32000
+                        }
                     }
-                }
-            });
-        }
-    } catch (e) { }
-});
+                });
+            }
+        } catch (err) { }
+    });
+} catch (globalErr) { }
 
 // Convert blockFace input safely into numerical offset vector
 function getFaceOffset(blockFace) {
@@ -38,20 +40,20 @@ function getFaceOffset(blockFace) {
 
 // Check if a block type is a concrete platform block
 function isConcreteBlock(typeId) {
-    return typeId && typeId.endsWith(CONCRETE_SUFFIX);
+    return typeof typeId === "string" && typeId.endsWith(CONCRETE_SUFFIX);
 }
 
 // Flood-fill search from joystick position to collect all connected non-air, non-concrete blocks
 function scanStructure(dimension, startPos) {
-    const queue = [{
-        x: Math.floor(Number(startPos.x) || 0),
-        y: Math.floor(Number(startPos.y) || 0),
-        z: Math.floor(Number(startPos.z) || 0)
-    }];
+    const sx = Math.floor(Number(startPos?.x) || 0);
+    const sy = Math.floor(Number(startPos?.y) || 0);
+    const sz = Math.floor(Number(startPos?.z) || 0);
+
+    const queue = [{ x: sx, y: sy, z: sz }];
     const visited = new Set();
     const blocksData = [];
 
-    visited.add(`${queue[0].x},${queue[0].y},${queue[0].z}`);
+    visited.add(`${sx},${sy},${sz}`);
     let concreteFound = false;
 
     while (queue.length > 0 && blocksData.length < MAX_BLOCKS) {
@@ -65,9 +67,9 @@ function scanStructure(dimension, startPos) {
             concreteFound = true;
         }
 
-        const dx = curr.x - queue[0]?.x || (curr.x - startPos.x);
-        const dy = curr.y - queue[0]?.y || (curr.y - startPos.y);
-        const dz = curr.z - queue[0]?.z || (curr.z - startPos.z);
+        const dx = curr.x - sx;
+        const dy = curr.y - sy;
+        const dz = curr.z - sz;
 
         blocksData.push({
             dx: Math.floor(dx),
@@ -104,11 +106,15 @@ function scanStructure(dimension, startPos) {
 
 // Clear assembled structure blocks from the world
 function clearStructureBlocks(dimension, startPos, blocksData) {
+    const sx = Math.floor(Number(startPos?.x) || 0);
+    const sy = Math.floor(Number(startPos?.y) || 0);
+    const sz = Math.floor(Number(startPos?.z) || 0);
+
     for (const b of blocksData) {
         const targetPos = {
-            x: Math.floor(startPos.x) + b.dx,
-            y: Math.floor(startPos.y) + b.dy,
-            z: Math.floor(startPos.z) + b.dz
+            x: sx + b.dx,
+            y: sy + b.dy,
+            z: sz + b.dz
         };
         const block = dimension.getBlock(targetPos);
         if (block) {
@@ -119,6 +125,10 @@ function clearStructureBlocks(dimension, startPos, blocksData) {
 
 // Convert structure back to world blocks at the vehicle position
 function rebuildStructureInWorld(dimension, entityPos, entityRotation, blocksData) {
+    const ex = Math.floor(Number(entityPos?.x) || 0);
+    const ey = Math.floor(Number(entityPos?.y) || 0);
+    const ez = Math.floor(Number(entityPos?.z) || 0);
+
     const rad = ((Number(entityRotation?.y) || 0) * Math.PI) / 180;
     const cos = Math.cos(rad);
     const sin = Math.sin(rad);
@@ -129,9 +139,9 @@ function rebuildStructureInWorld(dimension, entityPos, entityRotation, blocksDat
         const rz = Math.round(b.dx * sin + b.dz * cos);
 
         const targetPos = {
-            x: Math.floor(entityPos.x) + rx,
-            y: Math.floor(entityPos.y) + b.dy,
-            z: Math.floor(entityPos.z) + rz
+            x: ex + rx,
+            y: ey + b.dy,
+            z: ez + rz
         };
 
         const block = dimension.getBlock(targetPos);
@@ -163,9 +173,9 @@ world.beforeEvents.itemUseOn.subscribe((event) => {
     const dimension = player.dimension;
     const blockLoc = event.block.location;
     const blockPos = {
-        x: Math.floor(Number(blockLoc.x) || 0),
-        y: Math.floor(Number(blockLoc.y) || 0),
-        z: Math.floor(Number(blockLoc.z) || 0)
+        x: Math.floor(Number(blockLoc?.x) || 0),
+        y: Math.floor(Number(blockLoc?.y) || 0),
+        z: Math.floor(Number(blockLoc?.z) || 0)
     };
 
     const faceOffset = getFaceOffset(event.blockFace);
