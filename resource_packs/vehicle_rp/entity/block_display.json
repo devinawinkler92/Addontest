@@ -1,0 +1,20 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "custom:block_display",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/blocks/joystick"
+      },
+      "geometry": {
+        "default": "geometry.joystick_block"
+      },
+      "render_controllers": [
+        "controller.render.default"
+      ]
+    }
+  }
+}

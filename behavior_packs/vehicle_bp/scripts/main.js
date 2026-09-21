@@ -4,11 +4,6 @@ import { system, world, ItemStack, EntityComponentTypes, BlockPermutation } from
 const MAX_BLOCKS = 250;
 const CONCRETE_SUFFIX = "_concrete";
 
-// Check if a block type is a concrete platform block
-function isConcreteBlock(typeId) {
-    return typeof typeId === "string" && typeId.endsWith(CONCRETE_SUFFIX);
-}
-
 // Convert blockFace input safely into numerical offset vector
 function getFaceOffset(blockFace) {
     if (!blockFace) return { x: 0, y: 1, z: 0 };
@@ -22,6 +17,11 @@ function getFaceOffset(blockFace) {
     if (str.includes("west")) return { x: -1, y: 0, z: 0 };
 
     return { x: 0, y: 1, z: 0 };
+}
+
+// Check if a block type is a concrete platform block
+function isConcreteBlock(typeId) {
+    return typeof typeId === "string" && typeId.endsWith(CONCRETE_SUFFIX);
 }
 
 // Flood-fill search from joystick position to collect all connected non-air, non-concrete blocks
@@ -143,7 +143,7 @@ function rebuildStructureInWorld(dimension, entityPos, entityRotation, blocksDat
     }
 }
 
-// Trigger structure assembly when placing or interacting with custom:joystick block
+// Trigger structure assembly when placing custom:joystick block
 world.afterEvents.playerPlaceBlock.subscribe((event) => {
     if (event.block.typeId !== "custom:joystick") return;
 
@@ -170,21 +170,21 @@ world.afterEvents.playerPlaceBlock.subscribe((event) => {
         const spawnPos = { x: blockPos.x + 0.5, y: blockPos.y, z: blockPos.z + 0.5 };
         const vehicleEntity = dimension.spawnEntity("custom:vehicle", spawnPos);
 
-        // Store structure metadata
+        // Store structure metadata into Dynamic Property
         const structureJson = JSON.stringify(scanResult.blocksData);
         try {
             vehicleEntity.setDynamicProperty("vehicle_blocks", structureJson);
         } catch (e) { }
-        vehicleEntity.nameTag = `Vehicle (${scanResult.blocksData.length} blocks) [Interact to Mount]`;
+        vehicleEntity.nameTag = `Vehicle (${scanResult.blocksData.length} blocks) [Interact to Drive]`;
 
         // Clear world blocks
         clearStructureBlocks(dimension, blockPos, scanResult.blocksData);
 
-        player.sendMessage("§a[Vehicle Builder] Vehicle Assembled! Right-click / tap the vehicle to mount and drive!");
+        player.sendMessage("§a[Vehicle Builder] Vehicle Assembled! Right-click / tap the Joystick to mount and drive!");
     });
 });
 
-// Main tick loop for driving, flying, water buoyancy
+// Main tick loop for smooth driving, flying, water buoyancy
 system.runInterval(() => {
     for (const dimension of [world.getDimension("overworld"), world.getDimension("nether"), world.getDimension("the_end")]) {
         const vehicles = dimension.getEntities({ type: "custom:vehicle" });
@@ -204,34 +204,35 @@ system.runInterval(() => {
                 const viewDirection = driver.getViewDirection();
                 const rot = driver.getRotation();
 
-                // Rotate vehicle with rider steering
+                // Align vehicle yaw with driver steering
                 vehicle.setRotation({ x: 0, y: rot.y });
 
-                // Check movement input from driver pitch & direction
-                const isMovingForward = Math.abs(viewDirection.x) > 0.05 || Math.abs(viewDirection.z) > 0.05;
+                // Check active movement input from driver
+                const isSteeringForward = viewDirection.z > 0.3 || viewDirection.x > 0.3 || viewDirection.z < -0.3 || viewDirection.x < -0.3;
 
                 let vx = 0;
                 let vz = 0;
                 let vy = 0;
 
-                if (isMovingForward) {
-                    const speed = 0.5;
+                // Move ONLY when driver pitches/steers
+                if (isSteeringForward) {
+                    const speed = 0.25; // Gentle smooth impulse
                     vx = viewDirection.x * speed;
                     vz = viewDirection.z * speed;
                 }
 
-                // Vertical flight controls (rocket mode) when looking up or down
-                if (viewDirection.y > 0.3) {
-                    vy = viewDirection.y * 0.4;
-                } else if (viewDirection.y < -0.4 && !isInWater) {
-                    vy = viewDirection.y * 0.3;
+                // Smooth rocket ship vertical flight controls when looking up/down
+                if (viewDirection.y > 0.35) {
+                    vy = viewDirection.y * 0.25; // Fly upwards smoothly
+                } else if (viewDirection.y < -0.45 && !isInWater) {
+                    vy = viewDirection.y * 0.2; // Descend smoothly
                 }
 
-                // Water buoyancy (pirate ship mode)
+                // Water buoyancy for pirate ship floating
                 if (isInWater) {
                     const waterBlock = dimension.getBlock({ x: Math.floor(currentPos.x), y: Math.ceil(currentPos.y), z: Math.floor(currentPos.z) });
                     if (waterBlock && waterBlock.isLiquid) {
-                        vy = 0.12;
+                        vy = 0.08; // Smooth water surface float
                     }
                 }
 
@@ -240,11 +241,11 @@ system.runInterval(() => {
                 }
 
             } else {
-                // Unmounted / Parked state: Keep vehicle afloat if in water, otherwise remain stationary
+                // Unmounted / Parked state: Vehicle stays 100% still (except light water float)
                 if (isInWater) {
                     const waterBlock = dimension.getBlock({ x: Math.floor(currentPos.x), y: Math.ceil(currentPos.y), z: Math.floor(currentPos.z) });
                     if (waterBlock && waterBlock.isLiquid) {
-                        vehicle.applyImpulse({ x: 0, y: 0.08, z: 0 });
+                        vehicle.applyImpulse({ x: 0, y: 0.05, z: 0 });
                     }
                 }
             }
