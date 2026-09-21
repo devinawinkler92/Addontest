@@ -7,13 +7,13 @@
         "default": "entity_alphatest"
       },
       "textures": {
-        "default": "textures/entity/boat/oak"
+        "default": "textures/blocks/joystick"
       },
       "geometry": {
         "default": "geometry.vehicle"
       },
       "render_controllers": [
-        "controller.render.boat"
+        "controller.render.default"
       ]
     }
   }
