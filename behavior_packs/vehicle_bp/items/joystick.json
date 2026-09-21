@@ -8,7 +8,11 @@
       }
     },
     "components": {
-      "minecraft:icon": "joystick",
+      "minecraft:icon": {
+        "textures": {
+          "default": "joystick"
+        }
+      },
       "minecraft:display_name": {
         "value": "Vehicle Control Joystick"
       },

@@ -1,10 +1,10 @@
-import { system, world, ItemStack, EntityComponentTypes, BlockPermutation, Direction } from "@minecraft/server";
+import { system, world, ItemStack, EntityComponentTypes, BlockPermutation } from "@minecraft/server";
 
 // Configuration limits and constants
 const MAX_BLOCKS = 250;
 const CONCRETE_SUFFIX = "_concrete";
 
-// Register dynamic property on world initialization
+// Dynamic Property Registration
 world.beforeEvents.worldInitialize.subscribe((event) => {
     try {
         if (event.propertyRegistry) {
@@ -18,35 +18,22 @@ world.beforeEvents.worldInitialize.subscribe((event) => {
                 }
             });
         }
-    } catch (e) {
-        // Fallback for different API versions
-    }
+    } catch (e) { }
 });
 
-// Helper function to get block face offset vector
+// Convert blockFace input safely into numerical offset vector
 function getFaceOffset(blockFace) {
-    switch (blockFace) {
-        case Direction.Up:
-        case "Up":
-            return { x: 0, y: 1, z: 0 };
-        case Direction.Down:
-        case "Down":
-            return { x: 0, y: -1, z: 0 };
-        case Direction.North:
-        case "North":
-            return { x: 0, y: 0, z: -1 };
-        case Direction.South:
-        case "South":
-            return { x: 0, y: 0, z: 1 };
-        case Direction.East:
-        case "East":
-            return { x: 1, y: 0, z: 0 };
-        case Direction.West:
-        case "West":
-            return { x: -1, y: 0, z: 0 };
-        default:
-            return { x: 0, y: 1, z: 0 };
-    }
+    if (!blockFace) return { x: 0, y: 1, z: 0 };
+
+    const str = String(blockFace).toLowerCase();
+    if (str.includes("up")) return { x: 0, y: 1, z: 0 };
+    if (str.includes("down")) return { x: 0, y: -1, z: 0 };
+    if (str.includes("north")) return { x: 0, y: 0, z: -1 };
+    if (str.includes("south")) return { x: 0, y: 0, z: 1 };
+    if (str.includes("east")) return { x: 1, y: 0, z: 0 };
+    if (str.includes("west")) return { x: -1, y: 0, z: 0 };
+
+    return { x: 0, y: 1, z: 0 };
 }
 
 // Check if a block type is a concrete platform block
@@ -56,11 +43,15 @@ function isConcreteBlock(typeId) {
 
 // Flood-fill search from joystick position to collect all connected non-air, non-concrete blocks
 function scanStructure(dimension, startPos) {
-    const queue = [startPos];
+    const queue = [{
+        x: Math.floor(Number(startPos.x) || 0),
+        y: Math.floor(Number(startPos.y) || 0),
+        z: Math.floor(Number(startPos.z) || 0)
+    }];
     const visited = new Set();
     const blocksData = [];
 
-    visited.add(`${startPos.x},${startPos.y},${startPos.z}`);
+    visited.add(`${queue[0].x},${queue[0].y},${queue[0].z}`);
     let concreteFound = false;
 
     while (queue.length > 0 && blocksData.length < MAX_BLOCKS) {
@@ -74,14 +65,14 @@ function scanStructure(dimension, startPos) {
             concreteFound = true;
         }
 
-        const dx = curr.x - startPos.x;
-        const dy = curr.y - startPos.y;
-        const dz = curr.z - startPos.z;
+        const dx = curr.x - queue[0]?.x || (curr.x - startPos.x);
+        const dy = curr.y - queue[0]?.y || (curr.y - startPos.y);
+        const dz = curr.z - queue[0]?.z || (curr.z - startPos.z);
 
         blocksData.push({
-            dx,
-            dy,
-            dz,
+            dx: Math.floor(dx),
+            dy: Math.floor(dy),
+            dz: Math.floor(dz),
             typeId: block.typeId,
             states: block.permutation.getAllStates()
         });
@@ -115,9 +106,9 @@ function scanStructure(dimension, startPos) {
 function clearStructureBlocks(dimension, startPos, blocksData) {
     for (const b of blocksData) {
         const targetPos = {
-            x: startPos.x + b.dx,
-            y: startPos.y + b.dy,
-            z: startPos.z + b.dz
+            x: Math.floor(startPos.x) + b.dx,
+            y: Math.floor(startPos.y) + b.dy,
+            z: Math.floor(startPos.z) + b.dz
         };
         const block = dimension.getBlock(targetPos);
         if (block) {
@@ -128,7 +119,7 @@ function clearStructureBlocks(dimension, startPos, blocksData) {
 
 // Convert structure back to world blocks at the vehicle position
 function rebuildStructureInWorld(dimension, entityPos, entityRotation, blocksData) {
-    const rad = ((entityRotation?.y ?? 0) * Math.PI) / 180;
+    const rad = ((Number(entityRotation?.y) || 0) * Math.PI) / 180;
     const cos = Math.cos(rad);
     const sin = Math.sin(rad);
 
@@ -170,17 +161,21 @@ world.beforeEvents.itemUseOn.subscribe((event) => {
     if (!player) return;
 
     const dimension = player.dimension;
-    const blockPos = event.block.location;
+    const blockLoc = event.block.location;
+    const blockPos = {
+        x: Math.floor(Number(blockLoc.x) || 0),
+        y: Math.floor(Number(blockLoc.y) || 0),
+        z: Math.floor(Number(blockLoc.z) || 0)
+    };
+
     const faceOffset = getFaceOffset(event.blockFace);
 
-    // Calculate placePos as exact integer coordinate numbers
     const placePos = {
         x: blockPos.x + faceOffset.x,
         y: blockPos.y + faceOffset.y,
         z: blockPos.z + faceOffset.z
     };
 
-    // Delay processing to after current event turn
     system.run(() => {
         let scanOrigin = placePos;
         let scanResult = scanStructure(dimension, scanOrigin);
