@@ -1,0 +1,20 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "custom:vehicle",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/boat/oak"
+      },
+      "geometry": {
+        "default": "geometry.boat"
+      },
+      "render_controllers": [
+        "controller.render.boat"
+      ]
+    }
+  }
+}
