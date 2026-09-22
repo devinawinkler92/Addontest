@@ -1,8 +1,8 @@
 {
   "resource_pack_name": "vehicle_rp",
-  "texture_name": "atlas.items",
+  "texture_name": "atlas.terrain",
   "texture_data": {
-    "joystick": {
+    "joystick_block": {
       "textures": "textures/blocks/joystick"
     }
   }
