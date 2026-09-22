@@ -1,19 +1,21 @@
 {
-  "format_version": "1.20.20",
+  "format_version": "1.20.80",
   "minecraft:item": {
     "description": {
       "identifier": "custom:joystick",
-      "category": "items"
+      "menu_category": {
+        "category": "items"
+      }
     },
     "components": {
-      "minecraft:icon": "joystick",
+      "minecraft:icon": {
+        "texture": "joystick"
+      },
       "minecraft:display_name": {
         "value": "Vehicle Control Joystick"
       },
       "minecraft:max_stack_size": 1,
-      "minecraft:block_placer": {
-        "block": "custom:joystick"
-      }
+      "minecraft:use_animation": "camera"
     }
   }
 }

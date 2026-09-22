@@ -1,7 +1,0 @@
-{
-  "format_version": [1, 1, 0],
-  "custom:joystick": {
-    "textures": "joystick_block",
-    "sound": "wood"
-  }
-}
