@@ -21,12 +21,12 @@
         "seconds_to_destroy": 0.5
       },
       "minecraft:selection_box": {
-        "origin": [-4, 0, -4],
-        "size": [8, 10, 8]
+        "origin": [-6, 0, -6],
+        "size": [12, 17, 12]
       },
       "minecraft:collision_box": {
-        "origin": [-4, 0, -4],
-        "size": [8, 10, 8]
+        "origin": [-6, 0, -6],
+        "size": [12, 17, 12]
       }
     }
   }

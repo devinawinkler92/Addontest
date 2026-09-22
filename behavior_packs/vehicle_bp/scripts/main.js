@@ -89,7 +89,7 @@ function clearStructureBlocks(dimension, startPos, blocksData) {
     }
 }
 
-// Place real blocks back in world when joystick is broken
+// Place real blocks back in world when vehicle is broken / crashes
 function rebuildStructureInWorld(dimension, entityPos, entityRotation, blocksData) {
     const ex = Math.floor(Number(entityPos?.x) || 0);
     const ey = Math.floor(Number(entityPos?.y) || 0);
@@ -177,17 +177,17 @@ world.afterEvents.playerPlaceBlock.subscribe((event) => {
         } catch (e) { }
         vehicleEntity.nameTag = `Vehicle (${scanResult.blocksData.length} blocks)`;
 
-        // Auto mount player
+        // Auto mount player cleanly
         const rideable = vehicleEntity.getComponent(EntityComponentTypes.Rideable);
         if (rideable) {
             rideable.addRider(player);
         }
 
-        player.sendMessage("§a[Vehicle Builder] Vehicle Assembled! Look forward to drive, look up to fly! Shift to unmount.");
+        player.sendMessage("§a[Vehicle Builder] Vehicle Assembled! Drive with look controls: level to drive, look up to fly! Shift to unmount.");
     });
 });
 
-// Main tick loop for driving, flying, water buoyancy
+// Main tick loop for driving, flying, water buoyancy, and high-velocity crash disassemble
 system.runInterval(() => {
     for (const dimension of [world.getDimension("overworld"), world.getDimension("nether"), world.getDimension("the_end")]) {
         const vehicles = dimension.getEntities({ type: "custom:vehicle" });
@@ -216,17 +216,17 @@ system.runInterval(() => {
                 let vz = 0;
                 let vy = 0;
 
-                // Drive forward smoothly when looking forward/level (-25 deg to +30 deg)
-                if (pitch >= -25 && pitch <= 30) {
+                // Driving forward when looking level (-20 deg to +25 deg)
+                if (pitch >= -20 && pitch <= 25) {
                     const speed = 0.35;
                     vx = viewDirection.x * speed;
                     vz = viewDirection.z * speed;
                 }
 
-                // Vertical rocket flight when looking up (< -25 deg)
-                if (pitch < -25) {
+                // Rocket flying upwards when looking up (< -20 deg)
+                if (pitch < -20) {
                     vy = 0.3;
-                    const flySpeed = 0.2;
+                    const flySpeed = 0.22;
                     vx = viewDirection.x * flySpeed;
                     vz = viewDirection.z * flySpeed;
                 } else if (pitch > 35 && !isInWater) {
@@ -242,12 +242,39 @@ system.runInterval(() => {
                     }
                 }
 
+                // Check collision into solid block at high velocity for CRASH disassemble feature
+                const aheadBlock = dimension.getBlock({
+                    x: Math.floor(currentPos.x + vx * 2),
+                    y: Math.floor(currentPos.y + vy * 2),
+                    z: Math.floor(currentPos.z + vz * 2)
+                });
+
+                if (aheadBlock && !aheadBlock.isAir && !aheadBlock.isLiquid && !isConcreteBlock(aheadBlock.typeId)) {
+                    // High velocity crash! Disassemble vehicle & restore blocks
+                    let structureDataStr;
+                    try {
+                        structureDataStr = vehicle.getDynamicProperty("vehicle_blocks");
+                    } catch (e) { }
+
+                    if (structureDataStr) {
+                        try {
+                            const blocksData = JSON.parse(structureDataStr);
+                            rebuildStructureInWorld(dimension, currentPos, vehicle.getRotation(), blocksData);
+                        } catch (e) { }
+                    }
+
+                    dimension.spawnItem(new ItemStack("custom:joystick", 1), currentPos);
+                    driver.sendMessage("§c[Vehicle Builder] CRASH! Vehicle impacted terrain and disassembled!");
+                    vehicle.remove();
+                    continue;
+                }
+
                 if (vx !== 0 || vy !== 0 || vz !== 0) {
                     vehicle.applyImpulse({ x: vx, y: vy, z: vz });
                 }
 
             } else {
-                // Unmounted state: Vehicle remains parked in place as entity! No duplicate blocks or extra items!
+                // Unmounted state: Vehicle remains parked safely in place as entity! ZERO auto-movement!
                 if (isInWater) {
                     const waterBlock = dimension.getBlock({ x: Math.floor(currentPos.x), y: Math.ceil(currentPos.y), z: Math.floor(currentPos.z) });
                     if (waterBlock && waterBlock.isLiquid) {
